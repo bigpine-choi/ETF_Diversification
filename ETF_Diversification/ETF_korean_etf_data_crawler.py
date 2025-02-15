@@ -13,7 +13,7 @@ BASE_URL = "https://finance.naver.com/item/sise_day.nhn?code={}&page={}"
 
 # ✅ 원하는 날짜 범위 설정
 start_date = "2024-07-16"
-end_date = "2025-02-08"
+end_date = "2025-02-16"
 
 
 # ✅ 최대 페이지 수 가져오는 함수 (더 정확한 최대 페이지 탐색)
@@ -84,6 +84,10 @@ def fetch_etf_data(ticker):
     df = pd.DataFrame(all_data, columns=["날짜", "종가", "거래량"])
     df["날짜"] = pd.to_datetime(df["날짜"])
     df = df.sort_values(by="날짜")
+
+    # ✅ 중복된 날짜 제거 (모든 ETF에 적용)
+    df = df.drop_duplicates(subset=["날짜"], keep="first")  # ✅ 모든 ETF에서 중복된 날짜 제거
+    print(f"⚠️ {ticker} ETF에서 중복된 날짜 제거 완료! (중복 제거 후 {len(df)}개 데이터)")
 
     # ✅ 사용자 지정 날짜 범위만 필터링
     df = df[(df["날짜"] >= start_date) & (df["날짜"] <= end_date)]
