@@ -5,15 +5,16 @@ import time
 import random
 from concurrent.futures import ThreadPoolExecutor
 
-# ✅ 한국 ETF 9종목
-korean_etfs = ["428510", "456250", "456600", "465660", "463050", "466920", "475080", "478150", "486450"]
+# ✅ 한국 ETF 14종목
+korean_etfs = ["428510", "456250", "456600", "465660", "463050", "466920", "478150", "486450", "475050", "468380",
+               "153130", "475080", "481340", "434060"]
 
 # ✅ 네이버 금융 일별 시세 URL
 BASE_URL = "https://finance.naver.com/item/sise_day.nhn?code={}&page={}"
 
 # ✅ 원하는 날짜 범위 설정
 start_date = "2024-07-16"
-end_date = "2025-02-16"
+end_date = "2025-03-14"
 
 
 # ✅ 최대 페이지 수 가져오는 함수 (더 정확한 최대 페이지 탐색)
