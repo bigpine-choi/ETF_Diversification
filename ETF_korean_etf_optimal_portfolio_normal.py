@@ -29,10 +29,6 @@ etf_names = {
     "434060": "TDF2050",
 }
 
-# ✅ '안전자산'과 '위험자산' 구분
-safe_assets = ["153130", "475080", "481340", "434060"]  # 단기채권(현금), 테슬라커버드콜, 미국채30년, TDF2050
-risky_assets = [ticker for ticker in korean_etfs if ticker not in safe_assets]
-
 # ✅ ETF 종가 데이터 로드 & 병합
 df_list = []
 for ticker in korean_etfs:
@@ -59,7 +55,7 @@ annual_cov_matrix = np.nan_to_num(df_returns.cov() * trading_days, nan=0.0)
 risk_free_rate = 0.03
 
 # ✅ 랜덤 포트폴리오 생성
-num_portfolios = 300000
+num_portfolios = 500000
 results = np.zeros((4, num_portfolios))
 weights_record = []  # 리스트로 유지
 
@@ -86,11 +82,9 @@ optimal_return = results[0, max_sharpe_idx]  # 기대수익률
 optimal_volatility = results[1, max_sharpe_idx]  # 변동성
 optimal_sharpe = results[2, max_sharpe_idx]  # ✅ 수정된 샤프 비율
 
-
 # ✅ 효율적 투자선 계산
 def min_variance(weights):
     return np.sqrt(np.dot(weights.T, np.dot(annual_cov_matrix, weights)))  # ✅ annual_cov_matrix
-
 
 constraints = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1})  # ✅ 가중치 합 = 1
 bounds = tuple((0, 1) for _ in range(len(korean_etfs)))  # ✅ 가중치 범위: 0 ~ 1
@@ -110,9 +104,27 @@ for target in target_returns:
         method='SLSQP',
         bounds=bounds,
         constraints=constraints,
-        options={'maxiter': 500}  # ✅ 반복 제한 추가
+        options={'maxiter': 1000}  # ✅ 반복 제한 추가
     )
     efficient_portfolio.append(result.fun if result.success else np.nan)  # ✅ 실패 시 기본값 적용
+
+# ✅ 최적 포트폴리오 비중 출력(콘솔)
+optimal_portfolio = pd.DataFrame({'ETF': list(etf_names.values()), '비중': optimal_weights})
+optimal_portfolio["비중"] = optimal_portfolio["비중"].map(lambda x: f"{x:.2%}")
+print("\n📌 최적 포트폴리오 구성 (샤프 비율 최대화):")
+print(optimal_portfolio)
+
+# ✅ 종목별 연환산 수익률 출력(콘솔)
+print("\n📌 종목별 연환산 수익률 (%)")
+print(mean_annual_returns.map(lambda x: f"{x:.2%}"))
+
+# ✅ 샤프 비율 및 기대 수익률 출력(콘솔)
+optimal_return = np.sum(optimal_weights * mean_annual_returns)
+optimal_volatility = np.sqrt(np.dot(optimal_weights.T, np.dot(annual_cov_matrix, optimal_weights)))
+optimal_sharpe = (optimal_return - risk_free_rate) / optimal_volatility
+print(f"\n📌 기대 수익률: {optimal_return:.2%}")
+print(f"📌 변동성: {optimal_volatility:.2%}")
+print(f"📌 샤프 비율: {optimal_sharpe:.2f}")
 
 # ✅ 그래프 생성
 fig, ax = plt.subplots(figsize=(12, 6))
@@ -143,13 +155,3 @@ ax.legend()
 fig.colorbar(scatter, label="샤프 비율")
 ax.grid(True)
 plt.show()
-
-# ✅ 최적 포트폴리오 비중 출력(콘솔)
-optimal_portfolio = pd.DataFrame({'ETF': list(etf_names.values()), '비중': optimal_weights})
-optimal_portfolio["비중"] = optimal_portfolio["비중"].map(lambda x: f"{x:.2%}")
-print("\n📌 최적 포트폴리오 구성 (샤프 비율 최대화):")
-print(optimal_portfolio)
-
-# ✅ 종목별 연환산 수익률 출력(콘솔)
-print("\n📌 종목별 연환산 수익률 (%)")
-print(mean_annual_returns.map(lambda x: f"{x:.2%}"))

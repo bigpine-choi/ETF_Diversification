@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import scipy.optimize as sco
 
-# ✅ 한글 폰트 설정 (Windows: 'Malgun Gothic', macOS: 'AppleGothic')
+# ✅ 한글 폰트 설정 (Windows: 'Malgun Gothic')
 plt.rcParams['font.family'] = 'Malgun Gothic'
 plt.rcParams['axes.unicode_minus'] = False
 
@@ -45,17 +45,35 @@ df_prices.sort_index(inplace=True)
 # ✅ 수익률(Returns) 계산
 df_returns = df_prices.pct_change().dropna()
 
-# ✅ 기대 수익률과 공분산 행렬 계산 (연환산)
-trading_days = 252
+# ✅ EWMA 공분산 행렬 계산 함수
+def ewma_cov_matrix(returns, lambda_, trading_days):
+    """
+    EWMA 공분산 행렬 계산 (λ 값 적용)
+    returns: (T, N) 형태의 수익률 데이터프레임
+    lambda_: EWMA 감쇠 계수 (0~1 사이 값, 1에 가까울수록 최근 데이터 반영)
+    trading_days: 연환산 변환을 위한 거래일 수 (기본값 252)
+    """
+    T, N = returns.shape
+    weights = np.array([(1 - lambda_) * lambda_**(T - t) for t in range(T)])
+    weights /= weights.sum()  # 가중치 정규화
+    mean_returns = (returns * weights[:, None]).sum(axis=0)  # EWMA 평균 수익률
+    cov_matrix = (returns - mean_returns).T @ np.diag(weights) @ (returns - mean_returns)
+    return cov_matrix * trading_days  # 연환산 변환
+
+# ✅ EWMA 공분산 행렬 적용 (연환산)
+trading_days = 252  # 연환산 기준 252 거래일
+lambda_ = 0.94  # 최근 데이터에 더 큰 가중치를 주는 감쇠 계수
+annual_cov_matrix = ewma_cov_matrix(df_returns.to_numpy(), lambda_, trading_days)
+
+# ✅ 기하평균 기대 수익률 적용 (연환산)
 mean_daily_returns = np.exp(np.log(1 + df_returns).mean()) - 1
 mean_annual_returns = (1 + mean_daily_returns) ** trading_days - 1
-annual_cov_matrix = np.nan_to_num(df_returns.cov() * trading_days, nan=0.0)
 
 # ✅ 무위험 수익률 (3%)
 risk_free_rate = 0.03
 
 # ✅ 랜덤 포트폴리오 생성
-num_portfolios = 300000
+num_portfolios = 500000
 results = np.zeros((4, num_portfolios))
 weights_record = []  # 리스트로 유지
 
@@ -82,11 +100,9 @@ optimal_return = results[0, max_sharpe_idx]  # 기대수익률
 optimal_volatility = results[1, max_sharpe_idx]  # 변동성
 optimal_sharpe = results[2, max_sharpe_idx]  # ✅ 수정된 샤프 비율
 
-
 # ✅ 효율적 투자선 계산
 def min_variance(weights):
     return np.sqrt(np.dot(weights.T, np.dot(annual_cov_matrix, weights)))  # ✅ annual_cov_matrix
-
 
 constraints = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1})  # ✅ 가중치 합 = 1
 bounds = tuple((0, 1) for _ in range(len(korean_etfs)))  # ✅ 가중치 범위: 0 ~ 1
@@ -106,9 +122,27 @@ for target in target_returns:
         method='SLSQP',
         bounds=bounds,
         constraints=constraints,
-        options={'maxiter': 500}  # ✅ 반복 제한 추가
+        options={'maxiter': 1000}  # ✅ 반복 제한 추가
     )
     efficient_portfolio.append(result.fun if result.success else np.nan)  # ✅ 실패 시 기본값 적용
+
+# ✅ 최적 포트폴리오 비중 출력(콘솔)
+optimal_portfolio = pd.DataFrame({'ETF': list(etf_names.values()), '비중': optimal_weights})
+optimal_portfolio["비중"] = optimal_portfolio["비중"].map(lambda x: f"{x:.2%}")
+print("\n📌 최적 포트폴리오 구성 (샤프 비율 최대화):")
+print(optimal_portfolio)
+
+# ✅ 종목별 연환산 수익률 출력(콘솔)
+print("\n📌 종목별 연환산 수익률 (%)")
+print(mean_annual_returns.map(lambda x: f"{x:.2%}"))
+
+# ✅ 샤프 비율 및 기대 수익률 출력(콘솔)
+optimal_return = np.sum(optimal_weights * mean_annual_returns)
+optimal_volatility = np.sqrt(np.dot(optimal_weights.T, np.dot(annual_cov_matrix, optimal_weights)))
+optimal_sharpe = (optimal_return - risk_free_rate) / optimal_volatility
+print(f"\n📌 기대 수익률: {optimal_return:.2%}")
+print(f"📌 변동성: {optimal_volatility:.2%}")
+print(f"📌 샤프 비율: {optimal_sharpe:.2f}")
 
 # ✅ 그래프 생성
 fig, ax = plt.subplots(figsize=(12, 6))
@@ -139,13 +173,3 @@ ax.legend()
 fig.colorbar(scatter, label="샤프 비율")
 ax.grid(True)
 plt.show()
-
-# ✅ 최적 포트폴리오 비중 출력(콘솔)
-optimal_portfolio = pd.DataFrame({'ETF': list(etf_names.values()), '비중': optimal_weights})
-optimal_portfolio["비중"] = optimal_portfolio["비중"].map(lambda x: f"{x:.2%}")
-print("\n📌 최적 포트폴리오 구성 (샤프 비율 최대화):")
-print(optimal_portfolio)
-
-# ✅ 종목별 연환산 수익률 출력(콘솔)
-print("\n📌 종목별 연환산 수익률 (%)")
-print(mean_annual_returns.map(lambda x: f"{x:.2%}"))
